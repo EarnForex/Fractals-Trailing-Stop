@@ -1,4 +1,4 @@
-# PSAR Trailing Stop
+# Fractals Trailing Stop
 
 Fractals Trailing Stop is an expert advisor for MT4 and MT5 developed by EarnForex.com.
 
