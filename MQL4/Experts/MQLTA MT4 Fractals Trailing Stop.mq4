@@ -1,7 +1,7 @@
 #property link          "https://www.earnforex.com/metatrader-expert-advisors/fractals-trailing-stop/"
-#property version       "1.02"
+#property version       "1.03"
 #property strict
-#property copyright     "EarnForex.com - 2019-2023"
+#property copyright     "EarnForex.com - 2019-2024"
 #property description   "This expert advisor will trail the stop-poss setting it to a recent Fractals value."
 #property description   " "
 #property description   "WARNING: Use this software at your own risk."
@@ -37,6 +37,7 @@ enum ENUM_CUSTOMTIMEFRAMES
 input string Comment_1 = "====================";  // Expert Advisor Settings
 input int BarsToScan = 10;                        // Bars To Scan (10=Last Ten Candles)
 input int FractalToUse = 1;                       // Fractal Number to Use (1 = First, 2 = Second, ...)
+input int ProfitPoints = 0;                       // Profit Points to Start Trailing (0 = ignore profit)
 input string Comment_2 = "====================";  // Orders Filtering Options
 input bool OnlyCurrentSymbol = true;              // Apply To Current Symbol Only
 input ENUM_CONSIDER OnlyType = All;               // Apply To
@@ -101,7 +102,7 @@ void OnChartEvent(const int id,
             ChangeTrailingEnabled();
         }
     }
-    if (id == CHARTEVENT_KEYDOWN)
+    else if (id == CHARTEVENT_KEYDOWN)
     {
         if (lparam == 27)
         {
@@ -164,9 +165,17 @@ void TrailingStop()
         if ((UseComment) && (StringFind(OrderComment(), CommentFilter) < 0)) continue;
         if ((OnlyType != All) && (OrderType() != OnlyType)) continue;
 
+        string Instrument = OrderSymbol();
+        double PointSymbol = MarketInfo(Instrument, MODE_POINT);
+        
+        if (ProfitPoints > 0) // Check if there is enough profit points on this position.
+        {
+            if (((OrderType() == OP_BUY)  && ((OrderClosePrice() - OrderOpenPrice()) / PointSymbol < ProfitPoints)) ||
+                ((OrderType() == OP_SELL) && ((OrderOpenPrice() - OrderClosePrice()) / PointSymbol < ProfitPoints))) continue;
+        }
+
         double NewSL = 0;
         double NewTP = 0;
-        string Instrument = OrderSymbol();
         double SLBuy = GetStopLossBuy(Instrument);
         double SLSell = GetStopLossSell(Instrument);
 

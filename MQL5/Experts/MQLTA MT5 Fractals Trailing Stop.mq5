@@ -1,7 +1,7 @@
 #property link          "https://www.earnforex.com/metatrader-expert-advisors/fractals-trailing-stop/"
-#property version       "1.02"
+#property version       "1.03"
 
-#property copyright     "EarnForex.com - 2019-2023"
+#property copyright     "EarnForex.com - 2019-2024"
 #property description   "This expert advisor will trail the stop-poss setting it to a recent Fractals value."
 #property description   " "
 #property description   "WARNING: Use this software at your own risk."
@@ -38,6 +38,7 @@ enum ENUM_CUSTOMTIMEFRAMES
 input string Comment_1 = "====================";  // Expert Advisor Settings
 input int BarsToScan = 10;                        // Bars To Scan (10=Last Ten Candles)
 input int FractalToUse = 1;                       // Fractal Number to Use (1 = First, 2 = Second, ...)
+input int ProfitPoints = 0;                       // Profit Points to Start Trailing (0 = ignore profit)
 input string Comment_2 = "====================";  // Orders Filtering Options
 input bool OnlyCurrentSymbol = true;              // Apply To Current Symbol Only
 input ENUM_CONSIDER OnlyType = All;               // Apply To
@@ -116,7 +117,7 @@ void OnChartEvent(const int id,
             ChangeTrailingEnabled();
         }
     }
-    if (id == CHARTEVENT_KEYDOWN)
+    else if (id == CHARTEVENT_KEYDOWN)
     {
         if (lparam == 27)
         {
@@ -201,13 +202,22 @@ void TrailingStop()
         if ((UseComment) && (StringFind(PositionGetString(POSITION_COMMENT), CommentFilter) < 0)) continue;
         if ((OnlyType != All) && (PositionGetInteger(POSITION_TYPE) != OnlyType)) continue;
 
+        string Instrument = PositionGetString(POSITION_SYMBOL);
+        double PointSymbol = SymbolInfoDouble(Instrument, SYMBOL_POINT);
+        ENUM_POSITION_TYPE PositionType = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+
+        if (ProfitPoints > 0) // Check if there is enough profit points on this position.
+        {
+            if (((PositionType == POSITION_TYPE_BUY)  && ((PositionGetDouble(POSITION_PRICE_CURRENT) - PositionGetDouble(POSITION_PRICE_OPEN)) / PointSymbol < ProfitPoints)) ||
+                ((PositionType == POSITION_TYPE_SELL) && ((PositionGetDouble(POSITION_PRICE_OPEN) - PositionGetDouble(POSITION_PRICE_CURRENT)) / PointSymbol < ProfitPoints))) continue;
+        }
+
         double NewSL = 0;
         double NewTP = 0;
-        string Instrument = PositionGetString(POSITION_SYMBOL);
         double SLBuy = GetStopLossBuy(Instrument);
         double SLSell = GetStopLossSell(Instrument);
 
-        if ((SLBuy == 0) || (SLSell == 0) || (SLSell == EMPTY_VALUE) || (SLSell == EMPTY_VALUE))
+        if ((SLBuy == 0) || (SLSell == 0) || (SLBuy == EMPTY_VALUE) || (SLSell == EMPTY_VALUE))
         {
             Print("Not enough historical data - please load more candles for the selected timeframe.");
             return;
@@ -218,8 +228,8 @@ void TrailingStop()
         SLSell = NormalizeDouble(SLSell, eDigits);
         double SLPrice = NormalizeDouble(PositionGetDouble(POSITION_SL), eDigits);
         double TPPrice = NormalizeDouble(PositionGetDouble(POSITION_TP), eDigits);
-        double Spread = SymbolInfoInteger(Instrument, SYMBOL_SPREAD) * SymbolInfoDouble(Instrument, SYMBOL_POINT);
-        double StopLevel = SymbolInfoInteger(Instrument, SYMBOL_TRADE_STOPS_LEVEL) * SymbolInfoDouble(Instrument, SYMBOL_POINT);
+        double Spread = SymbolInfoInteger(Instrument, SYMBOL_SPREAD) * PointSymbol;
+        double StopLevel = SymbolInfoInteger(Instrument, SYMBOL_TRADE_STOPS_LEVEL) * PointSymbol;
         // Adjust for tick size granularity.
         double TickSize = SymbolInfoDouble(Instrument, SYMBOL_TRADE_TICK_SIZE);
         if (TickSize > 0)
@@ -227,7 +237,7 @@ void TrailingStop()
             SLBuy = NormalizeDouble(MathRound(SLBuy / TickSize) * TickSize, eDigits);
             SLSell = NormalizeDouble(MathRound(SLSell / TickSize) * TickSize, eDigits);
         }
-        if ((PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) && (SLBuy < SymbolInfoDouble(Instrument, SYMBOL_BID) - StopLevel))
+        if ((PositionType == POSITION_TYPE_BUY) && (SLBuy < SymbolInfoDouble(Instrument, SYMBOL_BID) - StopLevel))
         {
             NewSL = NormalizeDouble(SLBuy, eDigits);
             NewTP = TPPrice;
@@ -237,7 +247,7 @@ void TrailingStop()
                 ModifyOrder((int)ticket, NewSL, NewTP);
             }
         }
-        else if ((PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_SELL) && (SLSell > SymbolInfoDouble(Instrument, SYMBOL_ASK) + StopLevel))
+        else if ((PositionType == POSITION_TYPE_SELL) && (SLSell > SymbolInfoDouble(Instrument, SYMBOL_ASK) + StopLevel))
         {
             NewSL = NormalizeDouble(SLSell + Spread, eDigits);
             NewTP = TPPrice;
@@ -377,6 +387,7 @@ void DrawPanel()
 
     ObjectSetInteger(0, PanelBase, OBJPROP_XSIZE, PanelRecX);
     ObjectSetInteger(0, PanelBase, OBJPROP_YSIZE, (PanelMovY + 1) * Rows + 3);
+    ChartRedraw();
 }
 
 void CleanPanel()
