@@ -1,5 +1,5 @@
 #property link          "https://www.earnforex.com/metatrader-expert-advisors/fractals-trailing-stop/"
-#property version       "1.03"
+#property version       "1.04"
 
 #property copyright     "EarnForex.com - 2019-2024"
 #property description   "This expert advisor will trail the stop-poss setting it to a recent Fractals value."
@@ -237,17 +237,17 @@ void TrailingStop()
             SLBuy = NormalizeDouble(MathRound(SLBuy / TickSize) * TickSize, eDigits);
             SLSell = NormalizeDouble(MathRound(SLSell / TickSize) * TickSize, eDigits);
         }
-        if ((PositionType == POSITION_TYPE_BUY) && (SLBuy < SymbolInfoDouble(Instrument, SYMBOL_BID) - StopLevel))
+        if ((PositionType == POSITION_TYPE_BUY) && (SLBuy < SymbolInfoDouble(Instrument, SYMBOL_BID) - StopLevel) && (SLBuy != 0))
         {
             NewSL = NormalizeDouble(SLBuy, eDigits);
             NewTP = TPPrice;
-            if ((NewSL > SLPrice) || (SLPrice == 0))
+            if (NewSL > SLPrice)
             {
                 
                 ModifyOrder((int)ticket, NewSL, NewTP);
             }
         }
-        else if ((PositionType == POSITION_TYPE_SELL) && (SLSell > SymbolInfoDouble(Instrument, SYMBOL_ASK) + StopLevel))
+        else if ((PositionType == POSITION_TYPE_SELL) && (SLSell > SymbolInfoDouble(Instrument, SYMBOL_ASK) + StopLevel) && (SLSell != 0))
         {
             NewSL = NormalizeDouble(SLSell + Spread, eDigits);
             NewTP = TPPrice;
@@ -399,11 +399,17 @@ void ChangeTrailingEnabled()
 {
     if (EnableTrailing == false)
     {
-        if (MQLInfoInteger(MQL_TRADE_ALLOWED)) EnableTrailing = true;
-        else
+        if (!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
         {
-            MessageBox("You need to first enable Live Trading in the EA options.", "WARNING", MB_OK);
+            MessageBox("Algorithmic trading is disabled in the platform's options! Please enable it via Tools->Options->Expert Advisors.", "WARNING", MB_OK);
+            return;
         }
+        if (!MQLInfoInteger(MQL_TRADE_ALLOWED))
+        {
+            MessageBox("Algo Trading is disabled in the Position Sizer's settings! Please tick the Allow Algo Trading checkbox on the Common tab.", "WARNING", MB_OK);
+            return;
+        }
+        EnableTrailing = true;
     }
     else EnableTrailing = false;
     DrawPanel();

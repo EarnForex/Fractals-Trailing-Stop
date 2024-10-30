@@ -1,5 +1,5 @@
 #property link          "https://www.earnforex.com/metatrader-expert-advisors/fractals-trailing-stop/"
-#property version       "1.03"
+#property version       "1.04"
 #property strict
 #property copyright     "EarnForex.com - 2019-2024"
 #property description   "This expert advisor will trail the stop-poss setting it to a recent Fractals value."
@@ -18,20 +18,6 @@ enum ENUM_CONSIDER
     All = -1,       // ALL ORDERS
     Buy = OP_BUY,   // BUY ONLY
     Sell = OP_SELL, // SELL ONLY
-};
-
-enum ENUM_CUSTOMTIMEFRAMES
-{
-    CURRENT = PERIOD_CURRENT, // CURRENT PERIOD
-    M1 = PERIOD_M1,           // M1
-    M5 = PERIOD_M5,           // M5
-    M15 = PERIOD_M15,         // M15
-    M30 = PERIOD_M30,         // M30
-    H1 = PERIOD_H1,           // H1
-    H4 = PERIOD_H4,           // H4
-    D1 = PERIOD_D1,           // D1
-    W1 = PERIOD_W1,           // W1
-    MN1 = PERIOD_MN1,         // MN1
 };
 
 input string Comment_1 = "====================";  // Expert Advisor Settings
@@ -58,23 +44,23 @@ input int Xoff = 20;                              // Horizontal spacing for the 
 input int Yoff = 20;                              // Vertical spacing for the control panel
 
 int OrderOpRetry = 5;
-bool EnableTrailing = EnableTrailingParam;
 double DPIScale; // Scaling parameter for the panel based on the screen DPI.
-int PanelMovX, PanelMovY, PanelLabX, PanelLabY, PanelRecX;
+int PanelMovY, PanelLabX, PanelLabY, PanelRecX;
+bool EnableTrailing = EnableTrailingParam;
 
 int OnInit()
 {
     CleanPanel();
     EnableTrailing = EnableTrailingParam;
-    if (ShowPanel) DrawPanel();
 
     DPIScale = (double)TerminalInfoInteger(TERMINAL_SCREEN_DPI) / 96.0;
 
-    PanelMovX = (int)MathRound(50 * DPIScale);
     PanelMovY = (int)MathRound(20 * DPIScale);
     PanelLabX = (int)MathRound(150 * DPIScale);
     PanelLabY = PanelMovY;
     PanelRecX = PanelLabX + 4;
+
+    if (ShowPanel) DrawPanel();
 
     return INIT_SUCCEEDED;
 }
@@ -192,17 +178,17 @@ void TrailingStop()
             SLBuy = NormalizeDouble(MathRound(SLBuy / TickSize) * TickSize, eDigits);
             SLSell = NormalizeDouble(MathRound(SLSell / TickSize) * TickSize, eDigits);
         }
-        if ((OrderType() == OP_BUY) && (SLBuy < MarketInfo(Instrument, MODE_BID) - StopLevel))
+        if ((OrderType() == OP_BUY) && (SLBuy < MarketInfo(Instrument, MODE_BID) - StopLevel) && (SLBuy != 0))
         {
             NewSL = NormalizeDouble(SLBuy, eDigits);
             NewTP = TPPrice;
 
-            if (NewSL > SLPrice + StopLevel || SLPrice == 0)
+            if (NewSL > SLPrice)
             {
                 ModifyOrder(OrderTicket(), OrderOpenPrice(), NewSL, NewTP);
             }
         }
-        else if ((OrderType() == OP_SELL) && (SLSell > MarketInfo(Instrument, MODE_ASK) + StopLevel))
+        else if ((OrderType() == OP_SELL) && (SLSell > MarketInfo(Instrument, MODE_ASK) + StopLevel) && (SLSell != 0))
         {
             NewSL = NormalizeDouble(SLSell + Spread, eDigits);
             NewTP = TPPrice;
@@ -352,11 +338,17 @@ void ChangeTrailingEnabled()
 {
     if (EnableTrailing == false)
     {
-        if (IsTradeAllowed()) EnableTrailing = true;
-        else
+        if (!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
         {
-            MessageBox("You need to first enable Live Trading in the EA options.", "WARNING", MB_OK);
+            MessageBox("Automated trading is disabled in the platform's options! Please enable it via Tools->Options->Expert Advisors.", "WARNING", MB_OK);
+            return;
         }
+        if (!MQLInfoInteger(MQL_TRADE_ALLOWED))
+        {
+            MessageBox("Live Trading is disabled in the Position Sizer's settings! Please tick the Allow Live Trading checkbox on the Common tab.", "WARNING", MB_OK);
+            return;
+        }
+        EnableTrailing = true;
     }
     else EnableTrailing = false;
     DrawPanel();
